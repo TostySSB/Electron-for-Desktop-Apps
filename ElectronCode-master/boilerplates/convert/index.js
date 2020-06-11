@@ -1,6 +1,6 @@
 const electron = require("electron");
 const ffmpeg = require("fluent-ffmpeg");
-const { app, BrowserWindow, ipcMain } = electron;
+const { app, BrowserWindow, ipcMain, shell } = electron;
 const _ = require("lodash");
 
 let mainWindow;
@@ -43,7 +43,30 @@ ipcMain.on("videos:added", (event, videos) => {
     });
   });
   Promise.all(promises).then((results) => {
+    console.log(results)
     mainWindow.webContents.send('metadata:complete',
     results)
   });
 });
+
+ipcMain.on('conversion:start', (event, videos) => {
+  _.each(videos, video => {
+    const outputDirectory = video.path.split(video.name)[0];
+    const outputName = video.name.split('.')[0]
+    const outputPath = `${outputDirectory}${outputName}.${video.format}`;
+
+    ffmpeg(video.path)
+      .output(outputPath)
+      .on('progress', ({ timemark }) =>
+        mainWindow.webContents.send('conversion:progress', { video, timemark })
+      )
+      .on('end', () =>
+        mainWindow.webContents.send('conversion:end', { video, outputPath })
+      )
+      .run();
+  }); 
+})
+
+ipcMain.on('folder:open', (event, outputPath) => {
+  shell.showItemInFolder(outputPath)
+})
